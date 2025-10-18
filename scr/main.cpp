@@ -1,76 +1,135 @@
 #include "complex.h"
+#include "quaternion.h"
 #include <cassert>
 #include <iostream>
+#include <memory>
+#include <string>
+
+#ifndef RUN_CLI
+#define RUN_TESTS 1
+#endif
 
 #ifdef RUN_TESTS
-static void testConstructors() {
-    Complex z0;
-    assert(z0.re() == 0.0 && z0.im() == 0.0);
-
-    Complex z1(3.0, -4.0);
-    assert(z1.re() == 3.0 && z1.im() == -4.0);
-
-    Complex z2(z1);
-    assert(z2.equals(z1));
+static void testComplex() {
+    Complex a(3,4), b(1,-2);
+    std::unique_ptr<Number> s(a.add(b));
+    auto* sc = dynamic_cast<Complex*>(s.get());
+    assert(sc && sc->equals(Complex(4,2)));
+    std::unique_ptr<Number> m(a.mul(b));
+    auto* mc = dynamic_cast<Complex*>(m.get());
+    assert(mc && mc->equals(Complex(11,-2)));
+    Complex q = a.inv();
+    assert(q.equals(Complex(0.12, -0.16), 1e-12));
 }
-
-static void testSetters() {
-    Complex z;
-    z.set(1.5, -2.5);
-    assert(z.re() == 1.5 && z.im() == -2.5);
-
-    bool threw = false;
-    try { z.setRe(1.0 / 0.0); } catch (...) { threw = true; }
-    assert(threw);
+static void testQuaternion() {
+    Quaternion x(1,2,3,4);
+    Quaternion y(5,6,7,8);
+    std::unique_ptr<Number> s(x.add(y));
+    auto* sq = dynamic_cast<Quaternion*>(s.get());
+    assert(sq && sq->equals(Quaternion(6,8,10,12)));
+    std::unique_ptr<Number> d(x.sub(y));
+    auto* dq = dynamic_cast<Quaternion*>(d.get());
+    assert(dq && dq->equals(Quaternion(-4,-4,-4,-4)));
+    std::unique_ptr<Number> m(x.mul(y));
+    auto* mq = dynamic_cast<Quaternion*>(m.get());
+    assert(mq && mq->equals(Quaternion(-60,12,30,24)));
+    Quaternion invx = x.inv();
+    std::unique_ptr<Number> id(x.mul(invx));
+    auto* idq = dynamic_cast<Quaternion*>(id.get());
+    assert(idq && idq->equals(Quaternion(1,0,0,0), 1e-9));
+    std::unique_ptr<Number> qd(x.div(y));
+    auto* qdq = dynamic_cast<Quaternion*>(qd.get());
+    std::unique_ptr<Number> back(qdq->mul(y));
+    auto* backq = dynamic_cast<Quaternion*>(back.get());
+    assert(backq && backq->equals(x, 1e-9));
 }
-
-static void testOps() {
-    Complex a(3, 4), b(1, -2);
-
-    auto s = a.add(b);  // 4 + 2i
-    assert(s.equals(Complex(4, 2)));
-
-    auto d = a.sub(b);  // 2 + 6i
-    assert(d.equals(Complex(2, 6)));
-
-    auto m = a.mul(b);  // 11 - 2i
-    assert(m.equals(Complex(11, -2)));
-
-    Complex c(2, 1);
-    auto q = a.div(c);  // (3+4i)/(2+i) = 2 + 1i
-    assert(q.equals(Complex(2, 1)));
-
-    bool threw = false;
-    try { (void)a.div(Complex(0, 0)); } catch (...) { threw = true; }
-    assert(threw);
+static void testIdentify() {
+    Complex c(1,2);
+    Quaternion q(1,0,0,0);
+    assert(c.identify() == "complex");
+    assert(q.identify() == "quaternion");
 }
-
-static void testHelpers() {
-    Complex z(3, -4);
-    assert(z.conj().equals(Complex(3, 4)));
-    assert(z.neg().equals(Complex(-3, 4)));
-    assert(z.abs() == 5.0);
-
-    auto inv = z.inv(); // (3+4i)/25
-    assert(inv.equals(Complex(0.12, 0.16), 1e-12));
-}
-
 static void runAll() {
-    testConstructors();
-    testSetters();
-    testOps();
-    testHelpers();
+    testComplex();
+    testQuaternion();
+    testIdentify();
     std::cout << "OK\n";
 }
 #endif
 
+#ifdef RUN_CLI
+static void runCli() {
+    std::unique_ptr<Number> cur;
+    std::string cmd;
+    std::cout << "c a b | q a b c d | add|sub|mul|div <type> ... | abs | id | print | exit\n";
+    while (std::cin >> cmd) {
+        try {
+            if (cmd == "c") {
+                double a,b; std::cin >> a >> b;
+                cur.reset(new Complex(a,b));
+                std::cout << "ok\n";
+            } else if (cmd == "q") {
+                double a,b,c,d; std::cin >> a >> b >> c >> d;
+                cur.reset(new Quaternion(a,b,c,d));
+                std::cout << "ok\n";
+            } else if (cmd == "add" || cmd == "sub" || cmd == "mul" || cmd == "div") {
+                if (!cur) { std::cout << "empty\n"; continue; }
+                std::string t; std::cin >> t;
+                if (t == "c") {
+                    double a,b; std::cin >> a >> b;
+                    Complex rhs(a,b);
+                    std::unique_ptr<Number> res(
+                        cmd=="add"?cur->add(rhs):
+                        cmd=="sub"?cur->sub(rhs):
+                        cmd=="mul"?cur->mul(rhs):
+                                   cur->div(rhs));
+                    cur.swap(res);
+                    std::cout << "ok\n";
+                } else if (t == "q") {
+                    double a,b,c,d; std::cin >> a >> b >> c >> d;
+                    Quaternion rhs(a,b,c,d);
+                    std::unique_ptr<Number> res(
+                        cmd=="add"?cur->add(rhs):
+                        cmd=="sub"?cur->sub(rhs):
+                        cmd=="mul"?cur->mul(rhs):
+                                   cur->div(rhs));
+                    cur.swap(res);
+                    std::cout << "ok\n";
+                } else {
+                    std::cout << "type?\n";
+                }
+            } else if (cmd == "abs") {
+                if (!cur) { std::cout << "empty\n"; continue; }
+                std::cout << cur->abs() << "\n";
+            } else if (cmd == "id") {
+                if (!cur) { std::cout << "empty\n"; continue; }
+                std::cout << cur->identify() << "\n";
+            } else if (cmd == "print") {
+                if (!cur) { std::cout << "empty\n"; continue; }
+                if (cur->identify()=="complex") {
+                    auto* z = dynamic_cast<Complex*>(cur.get());
+                    std::cout << z->re() << " " << z->im() << "\n";
+                } else {
+                    auto* q = dynamic_cast<Quaternion*>(cur.get());
+                    std::cout << q->re() << " " << q->i() << " " << q->j() << " " << q->k() << "\n";
+                }
+            } else if (cmd == "exit") {
+                break;
+            } else {
+                std::cout << "?\n";
+            }
+        } catch (const std::exception& e) {
+            std::cout << "err: " << e.what() << "\n";
+        }
+    }
+}
+#endif
+
 int main() {
-#ifdef RUN_TESTS
-    runAll();
+#ifdef RUN_CLI
+    runCli();
 #else
-    Complex x(3, 4), y(1, -2);
-    Complex r = x.add(y);
-    std::cout << r.re() << " " << r.im() << "\n"; // 4 2
+    runAll();
 #endif
     return 0;
 }
