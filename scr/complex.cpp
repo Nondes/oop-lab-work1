@@ -1,36 +1,31 @@
 #include "complex.h"
+#include <sstream>
+#include <iomanip>
+#include <cmath>
+#include <stdexcept>
 
-Complex Complex::add(const Complex& b) const noexcept {
-    return Complex(re_ + b.re_, im_ + b.im_);
+std::unique_ptr<Number> Complex::clone() const {
+    return std::make_unique<Complex>(*this);
 }
 
-Complex Complex::sub(const Complex& b) const noexcept {
-    return Complex(re_ - b.re_, im_ - b.im_);
+std::string Complex::str() const {
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(6) << re_
+       << (im_ < 0 ? " - " : " + ")
+       << std::fixed << std::setprecision(6) << std::abs(im_) << "i";
+    return ss.str();
 }
 
-Complex Complex::mul(const Complex& b) const noexcept {
-    // (a+bi)(c+di) = (ac - bd) + (ad + bc)i
-    const double a = re_,   c = b.re_;
-    const double d1 = im_,  d2 = b.im_;
-    return Complex(a * c - d1 * d2, a * d2 + d1 * c);
+bool Complex::equals(const Number& other) const {
+    if (other.identify() != "complex") return false;
+    const auto& b = static_cast<const Complex&>(other);
+    const double eps = 1e-9;
+    return std::fabs(re_ - b.re_) < eps && std::fabs(im_ - b.im_) < eps;
 }
 
-Complex Complex::div(const Complex& b) const {
-    // (a+bi)/(c+di)
-    const double c2d2 = b.re_ * b.re_ + b.im_ * b.im_;
-    if (c2d2 == 0.0) throw std::invalid_argument("div by zero");
-    const double a = re_, d1 = im_, c = b.re_, d2 = b.im_;
-    return Complex((a * c + d1 * d2) / c2d2, (d1 * c - a * d2) / c2d2);
+Complex Complex::operator/(const Complex& b) const {
+    const double den = b.re_*b.re_ + b.im_*b.im_;
+    if (den == 0.0) throw std::runtime_error("complex division by zero");
+    return Complex((re_*b.re_ + im_*b.im_) / den, (im_*b.re_ - re_*b.im_) / den);
 }
 
-Complex Complex::inv() const {
-    const double den = re_ * re_ + im_ * im_;
-    if (den == 0.0) throw std::invalid_argument("inv of zero");
-    return Complex(re_ / den, -im_ / den);
-}
-
-bool Complex::equals(const Complex& b, double eps) const noexcept {
-    const double dr = re_ - b.re_;
-    const double di = im_ - b.im_;
-    return std::hypot(dr, di) <= eps;
-}
